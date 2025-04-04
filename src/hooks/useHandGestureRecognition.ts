@@ -87,28 +87,60 @@ export const useHandGestureRecognition = () => {
     const pinkyDip = landmarks[19];
     const pinkyTip = landmarks[20];
     
-    // Finger extended status (based on vertical position relative to wrist and MCP joints)
+    // Improved finger extended status (based on vertical and horizontal positions)
     const isThumbExtended = thumbTip.y < thumbMcp.y || thumbTip.x < thumbMcp.x - 0.1;
-    const isIndexExtended = indexTip.y < indexMcp.y - 0.1;
-    const isMiddleExtended = middleTip.y < middleMcp.y - 0.1;
-    const isRingExtended = ringTip.y < ringMcp.y - 0.1;
-    const isPinkyExtended = pinkyTip.y < pinkyMcp.y - 0.1;
     
-    // Finger curl status (using angle between joints)
-    const isIndexCurled = calculateAngle(indexMcp, indexPip, indexDip) < 120;
-    const isMiddleCurled = calculateAngle(middleMcp, middlePip, middleDip) < 120;
-    const isRingCurled = calculateAngle(ringMcp, ringPip, ringDip) < 120;
-    const isPinkyCurled = calculateAngle(pinkyMcp, pinkyPip, pinkyDip) < 120;
+    // For finger extension, compare tip position to MCP joint
+    const isIndexExtended = indexTip.y < indexMcp.y - 0.05;
+    const isMiddleExtended = middleTip.y < middleMcp.y - 0.05;
+    const isRingExtended = ringTip.y < ringMcp.y - 0.05;
+    const isPinkyExtended = pinkyTip.y < pinkyMcp.y - 0.05;
+    
+    // Check for finger curling - improved detection logic
+    const isIndexCurled = calculateAngle(indexMcp, indexPip, indexDip) < 160 || 
+                          (indexTip.y > indexPip.y);
+    
+    const isMiddleCurled = calculateAngle(middleMcp, middlePip, middleDip) < 160 || 
+                           (middleTip.y > middlePip.y);
+    
+    const isRingCurled = calculateAngle(ringMcp, ringPip, ringDip) < 160 || 
+                         (ringTip.y > ringPip.y);
+    
+    const isPinkyCurled = calculateAngle(pinkyMcp, pinkyPip, pinkyDip) < 160 || 
+                          (pinkyTip.y > pinkyPip.y);
     
     // Thumb to finger distances
     const thumbToIndexDist = distance(thumbTip, indexTip);
     const thumbToMiddleDist = distance(thumbTip, middleTip);
     
+    // Hand orientation
+    const isPalmFacing = wrist.z < indexMcp.z;
+    
     let detectedGesture = "None";
     let confidenceScore = 0.7;
     
+    // Fist detection - improved logic
+    if (!isIndexExtended && !isMiddleExtended && !isRingExtended && !isPinkyExtended && 
+        isIndexCurled && isMiddleCurled && isRingCurled && isPinkyCurled) {
+        
+        // Check that the fingertips are closer to the wrist than their MCP joints
+        const fingersCurled = 
+            distance(indexTip, wrist) < distance(indexMcp, wrist) &&
+            distance(middleTip, wrist) < distance(middleMcp, wrist) &&
+            distance(ringTip, wrist) < distance(ringMcp, wrist) &&
+            distance(pinkyTip, wrist) < distance(pinkyMcp, wrist);
+            
+        if (fingersCurled) {
+            detectedGesture = "Fist";
+            confidenceScore = 0.9;
+            console.log("Fist detected!", {
+                fingersCurled,
+                isIndexCurled, isMiddleCurled, isRingCurled, isPinkyCurled
+            });
+        }
+    } 
     // Victory sign - index and middle fingers extended, others curled
-    if (isIndexExtended && isMiddleExtended && !isRingExtended && !isPinkyExtended) {
+    else if (isIndexExtended && isMiddleExtended && !isRingExtended && !isPinkyExtended) {
       // Check if index and middle fingers are spread apart
       if (distance(indexTip, middleTip) > distance(indexMcp, middleMcp) * 1.2) {
         detectedGesture = "Victory";
@@ -129,12 +161,6 @@ export const useHandGestureRecognition = () => {
     else if (isIndexExtended && isMiddleExtended && isRingExtended && isPinkyExtended) {
       detectedGesture = "Open Palm";
       confidenceScore = 0.93;
-    } 
-    // Fist - no fingers extended, all curled in
-    else if (!isIndexExtended && !isMiddleExtended && !isRingExtended && !isPinkyExtended && 
-             isIndexCurled && isMiddleCurled && isRingCurled && isPinkyCurled) {
-      detectedGesture = "Fist";
-      confidenceScore = 0.88;
     }
     
     return { gesture: detectedGesture, confidence: confidenceScore };

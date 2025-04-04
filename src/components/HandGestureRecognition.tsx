@@ -28,6 +28,7 @@ const HandGestureRecognition = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [handDetected, setHandDetected] = useState(false);
   const [gestureCount, setGestureCount] = useState<Record<string, number>>({
     "Open Palm": 0,
     "Fist": 0,
@@ -68,6 +69,7 @@ const HandGestureRecognition = () => {
       tracks.forEach(track => track.stop());
       videoRef.current.srcObject = null;
       setIsStreaming(false);
+      setHandDetected(false);
     }
   };
 
@@ -139,15 +141,22 @@ const HandGestureRecognition = () => {
   };
 
   useEffect(() => {
-    if (currentGesture !== "None" && isStreaming) {
-      setGestureCount(prev => ({
-        ...prev,
-        [currentGesture]: prev[currentGesture] + 1
-      }));
+    if (handLandmarks) {
+      setHandDetected(true);
       
-      if (canvasRef.current && handLandmarks) {
+      // Only update gesture count when we have a valid gesture
+      if (currentGesture !== "None" && isStreaming) {
+        setGestureCount(prev => ({
+          ...prev,
+          [currentGesture]: (prev[currentGesture] || 0) + 1
+        }));
+      }
+      
+      if (canvasRef.current) {
         drawHandLandmarks();
       }
+    } else {
+      setHandDetected(false);
     }
   }, [currentGesture, confidence, isStreaming, handLandmarks]);
 
@@ -232,9 +241,18 @@ const HandGestureRecognition = () => {
                 </div>
               )}
 
-              {currentGesture !== "None" && isStreaming && (
-                <div className="absolute top-2 left-2 bg-black/50 text-white px-3 py-1 rounded-full text-sm">
-                  {currentGesture} ({Math.round(confidence * 100)}%)
+              {isStreaming && (
+                <div className="absolute top-2 right-2 flex flex-col gap-2">
+                  {handDetected && (
+                    <Badge variant="outline" className="bg-green-500/80 text-white border-0">
+                      Hand Detected
+                    </Badge>
+                  )}
+                  {currentGesture !== "None" && (
+                    <Badge variant="outline" className="bg-black/70 text-white border-0">
+                      {currentGesture} ({Math.round(confidence * 100)}%)
+                    </Badge>
+                  )}
                 </div>
               )}
             </div>
@@ -309,6 +327,15 @@ const HandGestureRecognition = () => {
             and make distinct gestures for best results. See the sample gestures above
             for guidance on how to position your hand.
           </p>
+          
+          <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-md">
+            <h4 className="font-medium text-amber-800 mb-1">Tips for Fist Detection</h4>
+            <p className="text-sm text-amber-700">
+              For the "Fist" gesture, make sure to curl all your fingers inward tightly, 
+              with fingertips closer to your palm than the knuckles. Keep your hand 
+              facing the camera for best detection results.
+            </p>
+          </div>
 
           <Sheet>
             <SheetTrigger asChild>
