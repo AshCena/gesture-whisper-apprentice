@@ -52,7 +52,10 @@ const HandGestureRecognition = () => {
       
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        setIsStreaming(true);
+        videoRef.current.onloadedmetadata = () => {
+          videoRef.current?.play();
+          setIsStreaming(true);
+        };
       }
     } catch (error) {
       console.error("Error accessing the webcam:", error);
@@ -155,7 +158,7 @@ const HandGestureRecognition = () => {
       if (isStreaming && videoRef.current) {
         await detectGesture(videoRef.current);
         
-        if (canvasRef.current && videoRef.current.readyState === 4) {
+        if (canvasRef.current && videoRef.current && videoRef.current.readyState >= 2) {
           canvasRef.current.width = videoRef.current.videoWidth;
           canvasRef.current.height = videoRef.current.videoHeight;
         }
@@ -215,10 +218,12 @@ const HandGestureRecognition = () => {
                 muted 
                 playsInline
                 className="w-full h-full object-cover"
+                style={{ transform: "scaleX(-1)" }}
               />
               <canvas 
                 ref={canvasRef} 
                 className="absolute top-0 left-0 w-full h-full"
+                style={{ transform: "scaleX(-1)" }}
               />
               
               {!isStreaming && (
@@ -236,18 +241,18 @@ const HandGestureRecognition = () => {
             
             <div className="mt-4 flex justify-between">
               {!isStreaming ? (
-                <Button onClick={startWebcam}>
+                <Button onClick={startWebcam} className="w-full sm:w-auto">
                   <Camera className="mr-2 h-4 w-4" />
                   Start Camera
                 </Button>
               ) : (
-                <Button variant="destructive" onClick={stopWebcam}>
+                <Button variant="destructive" onClick={stopWebcam} className="w-full sm:w-auto">
                   <X className="mr-2 h-4 w-4" />
                   Stop Camera
                 </Button>
               )}
               
-              <div className="flex items-center gap-2">
+              <div className="hidden sm:flex items-center gap-2">
                 <span className="text-sm font-medium">Current Gesture:</span>
                 <Badge variant="secondary" className="text-lg">
                   {currentGesture === "None" ? "None" : currentGesture}
