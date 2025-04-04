@@ -11,6 +11,7 @@ export const useHandGestureRecognition = () => {
   const [confidence, setConfidence] = useState<number>(0);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [handLandmarks, setHandLandmarks] = useState<mpHands.NormalizedLandmarkList | null>(null);
   const handsRef = useRef<mpHands.Hands | null>(null);
   const requestRef = useRef<number>();
 
@@ -30,8 +31,8 @@ export const useHandGestureRecognition = () => {
       hands.setOptions({
         maxNumHands: 1,
         modelComplexity: 1,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
+        minDetectionConfidence: 0.6, // Increased from 0.5
+        minTrackingConfidence: 0.6   // Increased from 0.5
       });
       
       handsRef.current = hands;
@@ -42,47 +43,98 @@ export const useHandGestureRecognition = () => {
     }
   };
 
+  // Calculate the angle between three points
+  const calculateAngle = (p1: mpHands.NormalizedLandmark, p2: mpHands.NormalizedLandmark, p3: mpHands.NormalizedLandmark) => {
+    const radians = Math.atan2(p3.y - p2.y, p3.x - p2.x) - Math.atan2(p1.y - p2.y, p1.x - p2.x);
+    let angle = Math.abs(radians * 180.0 / Math.PI);
+    if (angle > 180.0) angle = 360 - angle;
+    return angle;
+  }
+
+  // Calculate Euclidean distance between two points
+  const distance = (p1: mpHands.NormalizedLandmark, p2: mpHands.NormalizedLandmark) => {
+    return Math.sqrt(Math.pow(p1.x - p2.x, 2) + Math.pow(p1.y - p2.y, 2));
+  }
+
   // Detect gesture based on hand landmarks
   const recognizeGesture = (landmarks: mpHands.NormalizedLandmarkList) => {
     if (!landmarks || landmarks.length < 21) return { gesture: "None", confidence: 0 };
     
-    // Get key points for gesture recognition
-    const thumb = landmarks[4];
-    const indexFinger = landmarks[8];
-    const middleFinger = landmarks[12];
-    const ringFinger = landmarks[16];
-    const pinky = landmarks[20];
+    // Get key landmarks
     const wrist = landmarks[0];
+    const thumbCmc = landmarks[1];
+    const thumbMcp = landmarks[2];
+    const thumbIp = landmarks[3];
+    const thumbTip = landmarks[4];
     
-    // Distance calculations for fingers extended state
-    const isThumbUp = thumb.y < wrist.y - 0.1;
-    const isIndexUp = indexFinger.y < wrist.y - 0.15;
-    const isMiddleUp = middleFinger.y < wrist.y - 0.15;
-    const isRingUp = ringFinger.y < wrist.y - 0.15;
-    const isPinkyUp = pinky.y < wrist.y - 0.15;
+    const indexMcp = landmarks[5];
+    const indexPip = landmarks[6];
+    const indexDip = landmarks[7];
+    const indexTip = landmarks[8];
     
-    // Horizontal distances for specific gestures
-    const isThumbAway = Math.abs(thumb.x - indexFinger.x) > 0.1;
+    const middleMcp = landmarks[9];
+    const middlePip = landmarks[10];
+    const middleDip = landmarks[11];
+    const middleTip = landmarks[12];
     
-    // Recognize gestures based on finger positions
+    const ringMcp = landmarks[13];
+    const ringPip = landmarks[14];
+    const ringDip = landmarks[15];
+    const ringTip = landmarks[16];
+    
+    const pinkyMcp = landmarks[17];
+    const pinkyPip = landmarks[18];
+    const pinkyDip = landmarks[19];
+    const pinkyTip = landmarks[20];
+    
+    // Finger extended status (based on vertical position relative to wrist and MCP joints)
+    const isThumbExtended = thumbTip.y < thumbMcp.y || thumbTip.x < thumbMcp.x - 0.1;
+    const isIndexExtended = indexTip.y < indexMcp.y - 0.1;
+    const isMiddleExtended = middleTip.y < middleMcp.y - 0.1;
+    const isRingExtended = ringTip.y < ringMcp.y - 0.1;
+    const isPinkyExtended = pinkyTip.y < pinkyMcp.y - 0.1;
+    
+    // Finger curl status (using angle between joints)
+    const isIndexCurled = calculateAngle(indexMcp, indexPip, indexDip) < 120;
+    const isMiddleCurled = calculateAngle(middleMcp, middlePip, middleDip) < 120;
+    const isRingCurled = calculateAngle(ringMcp, ringPip, ringDip) < 120;
+    const isPinkyCurled = calculateAngle(pinkyMcp, pinkyPip, pinkyDip) < 120;
+    
+    // Thumb to finger distances
+    const thumbToIndexDist = distance(thumbTip, indexTip);
+    const thumbToMiddleDist = distance(thumbTip, middleTip);
+    
     let detectedGesture = "None";
     let confidenceScore = 0.7;
     
-    if (isIndexUp && isMiddleUp && !isRingUp && !isPinkyUp && !isThumbUp) {
-      detectedGesture = "Victory";
-      confidenceScore = 0.9;
-    } else if (isThumbUp && !isIndexUp && !isMiddleUp && !isRingUp && !isPinkyUp) {
+    // Victory sign - index and middle fingers extended, others curled
+    if (isIndexExtended && isMiddleExtended && !isRingExtended && !isPinkyExtended) {
+      // Check if index and middle fingers are spread apart
+      if (distance(indexTip, middleTip) > distance(indexMcp, middleMcp) * 1.2) {
+        detectedGesture = "Victory";
+        confidenceScore = 0.92;
+      }
+    } 
+    // Thumbs Up - only thumb extended upward, other fingers curled
+    else if (isThumbExtended && thumbTip.y < wrist.y - 0.15 && !isIndexExtended && !isMiddleExtended && !isRingExtended && !isPinkyExtended) {
       detectedGesture = "Thumbs Up";
-      confidenceScore = 0.9;
-    } else if (isIndexUp && !isMiddleUp && !isRingUp && !isPinkyUp) {
+      confidenceScore = 0.95;
+    } 
+    // Pointing - only index finger extended
+    else if (isIndexExtended && !isMiddleExtended && !isRingExtended && !isPinkyExtended) {
       detectedGesture = "Pointing";
-      confidenceScore = 0.85;
-    } else if (isIndexUp && isMiddleUp && isRingUp && isPinkyUp) {
-      detectedGesture = "Open Palm";
       confidenceScore = 0.9;
-    } else if (!isIndexUp && !isMiddleUp && !isRingUp && !isPinkyUp) {
+    } 
+    // Open Palm - all fingers extended
+    else if (isIndexExtended && isMiddleExtended && isRingExtended && isPinkyExtended) {
+      detectedGesture = "Open Palm";
+      confidenceScore = 0.93;
+    } 
+    // Fist - no fingers extended, all curled in
+    else if (!isIndexExtended && !isMiddleExtended && !isRingExtended && !isPinkyExtended && 
+             isIndexCurled && isMiddleCurled && isRingCurled && isPinkyCurled) {
       detectedGesture = "Fist";
-      confidenceScore = 0.8;
+      confidenceScore = 0.88;
     }
     
     return { gesture: detectedGesture, confidence: confidenceScore };
@@ -100,8 +152,11 @@ export const useHandGestureRecognition = () => {
       handsRef.current.onResults((results) => {
         if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
           // Hand detected, recognize gesture
+          const landmarks = results.multiHandLandmarks[0];
+          setHandLandmarks(landmarks);
+          
           const { gesture: detectedGesture, confidence: detectedConfidence } = 
-            recognizeGesture(results.multiHandLandmarks[0]);
+            recognizeGesture(landmarks);
           
           if (detectedGesture !== "None") {
             setGesture(detectedGesture);
@@ -109,6 +164,7 @@ export const useHandGestureRecognition = () => {
           }
         } else {
           // No hand detected
+          setHandLandmarks(null);
           setGesture("None");
           setConfidence(0);
         }
@@ -145,6 +201,7 @@ export const useHandGestureRecognition = () => {
     confidence,
     isInitialized,
     isProcessing,
-    detectGesture
+    detectGesture,
+    handLandmarks
   };
 };
