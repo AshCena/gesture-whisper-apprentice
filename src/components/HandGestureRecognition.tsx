@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,15 +8,14 @@ import {
   Hand, 
   X, 
   ThumbsUp, 
-  Victory, 
+  Scissors,
   PointerIcon, 
-  Grabbing, 
+  Grip, 
   CircleDashed 
 } from "lucide-react";
 import { useHandGestureRecognition } from "@/hooks/useHandGestureRecognition";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 
-// Sample gesture component
 const GestureExample = ({ name, icon, description }: { name: string; icon: React.ReactNode; description: string }) => (
   <div className="flex flex-col items-center p-3 border rounded-md bg-card">
     <div className="mb-2 text-3xl text-primary">{icon}</div>
@@ -38,7 +36,6 @@ const HandGestureRecognition = () => {
     "Thumbs Up": 0,
   });
 
-  // Use our hand gesture recognition hook
   const { 
     gesture: currentGesture, 
     confidence, 
@@ -47,7 +44,6 @@ const HandGestureRecognition = () => {
     handLandmarks
   } = useHandGestureRecognition();
 
-  // Start webcam stream
   const startWebcam = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -63,7 +59,6 @@ const HandGestureRecognition = () => {
     }
   };
 
-  // Stop webcam stream
   const stopWebcam = () => {
     if (videoRef.current && videoRef.current.srcObject) {
       const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
@@ -73,7 +68,6 @@ const HandGestureRecognition = () => {
     }
   };
 
-  // Draw hand landmarks on canvas
   const drawHandLandmarks = () => {
     const canvas = canvasRef.current;
     if (!canvas || !handLandmarks) return;
@@ -81,26 +75,17 @@ const HandGestureRecognition = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Clear previous drawings
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     
-    // Draw connections between landmarks
     const connections = [
-      // Thumb
       [0, 1], [1, 2], [2, 3], [3, 4],
-      // Index finger
       [0, 5], [5, 6], [6, 7], [7, 8],
-      // Middle finger
       [0, 9], [9, 10], [10, 11], [11, 12],
-      // Ring finger
       [0, 13], [13, 14], [14, 15], [15, 16],
-      // Pinky
       [0, 17], [17, 18], [18, 19], [19, 20],
-      // Palm
       [0, 5], [5, 9], [9, 13], [13, 17]
     ];
     
-    // Draw connections
     ctx.strokeStyle = '#4CAF50';
     ctx.lineWidth = 3;
     
@@ -117,12 +102,10 @@ const HandGestureRecognition = () => {
       ctx.stroke();
     });
     
-    // Draw landmarks
     handLandmarks.forEach((landmark, index) => {
       const x = landmark.x * canvas.width;
       const y = landmark.y * canvas.height;
       
-      // Different colors for different finger landmarks
       if (index === 0) { // Wrist
         ctx.fillStyle = '#FF5722';
       } else if (index >= 1 && index <= 4) { // Thumb
@@ -137,17 +120,14 @@ const HandGestureRecognition = () => {
         ctx.fillStyle = '#F44336';
       }
       
-      // Draw landmark point
       ctx.beginPath();
       ctx.arc(x, y, index % 4 === 0 ? 6 : 4, 0, 2 * Math.PI);
       ctx.fill();
     });
     
-    // Display gesture info
     if (currentGesture !== "None") {
       ctx.font = '24px Arial';
       ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-      // Black outline for better visibility
       ctx.strokeStyle = 'white';
       ctx.lineWidth = 3;
       ctx.strokeText(`${currentGesture} (${Math.round(confidence * 100)}%)`, 20, 40);
@@ -155,7 +135,6 @@ const HandGestureRecognition = () => {
     }
   };
 
-  // Update gesture count when gesture changes
   useEffect(() => {
     if (currentGesture !== "None" && isStreaming) {
       setGestureCount(prev => ({
@@ -163,23 +142,19 @@ const HandGestureRecognition = () => {
         [currentGesture]: prev[currentGesture] + 1
       }));
       
-      // If we have a canvas context, draw hand landmarks
       if (canvasRef.current && handLandmarks) {
         drawHandLandmarks();
       }
     }
   }, [currentGesture, confidence, isStreaming, handLandmarks]);
 
-  // Process video frames for hand gesture detection
   useEffect(() => {
     let animationId: number;
     
     const processFrame = async () => {
       if (isStreaming && videoRef.current) {
-        // Process the current video frame
         await detectGesture(videoRef.current);
         
-        // Update canvas dimensions to match video
         if (canvasRef.current && videoRef.current.readyState === 4) {
           canvasRef.current.width = videoRef.current.videoWidth;
           canvasRef.current.height = videoRef.current.videoHeight;
@@ -200,7 +175,6 @@ const HandGestureRecognition = () => {
     };
   }, [isStreaming, isInitialized, detectGesture]);
 
-  // Sample gestures with icons and descriptions
   const sampleGestures = [
     {
       name: "Open Palm",
@@ -209,7 +183,7 @@ const HandGestureRecognition = () => {
     },
     {
       name: "Fist",
-      icon: <Grabbing />,
+      icon: <Grip />,
       description: "Make a fist by curling all fingers inward"
     },
     {
@@ -219,7 +193,7 @@ const HandGestureRecognition = () => {
     },
     {
       name: "Victory",
-      icon: <Victory />,
+      icon: <Scissors />,
       description: "Extend index and middle fingers in a V shape"
     },
     {
@@ -304,7 +278,6 @@ const HandGestureRecognition = () => {
         </Card>
       </div>
 
-      {/* Sample Gestures Card */}
       <Card>
         <CardContent className="p-4">
           <h3 className="text-lg font-medium mb-4">Sample Gestures</h3>
@@ -321,7 +294,6 @@ const HandGestureRecognition = () => {
         </CardContent>
       </Card>
       
-      {/* How to use instructions */}
       <Card>
         <CardContent className="p-4">
           <h3 className="text-lg font-medium mb-2">How to use</h3>
