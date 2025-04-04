@@ -4,12 +4,12 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Camera, HandMetal, Hand, X } from "lucide-react";
+import { useHandGestureRecognition } from "@/hooks/useHandGestureRecognition";
 
 const HandGestureRecognition = () => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isStreaming, setIsStreaming] = useState(false);
-  const [currentGesture, setCurrentGesture] = useState<string>("None");
   const [gestureCount, setGestureCount] = useState<Record<string, number>>({
     "Open Palm": 0,
     "Fist": 0,
@@ -18,6 +18,15 @@ const HandGestureRecognition = () => {
     "Thumbs Up": 0,
   });
 
+  // Use our hand gesture recognition hook
+  const { 
+    gesture: currentGesture, 
+    confidence, 
+    isInitialized,
+    detectGesture 
+  } = useHandGestureRecognition();
+
+  // Start webcam stream
   const startWebcam = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -33,59 +42,83 @@ const HandGestureRecognition = () => {
     }
   };
 
+  // Stop webcam stream
   const stopWebcam = () => {
     if (videoRef.current && videoRef.current.srcObject) {
       const tracks = (videoRef.current.srcObject as MediaStream).getTracks();
       tracks.forEach(track => track.stop());
       videoRef.current.srcObject = null;
       setIsStreaming(false);
-      setCurrentGesture("None");
     }
   };
 
-  // This is a placeholder for the actual hand gesture recognition
-  // In a real implementation, you would use MediaPipe or TensorFlow.js here
+  // Draw hand landmarks on canvas
+  const drawHandLandmarks = (ctx: CanvasRenderingContext2D | null, landmarks: any[]) => {
+    if (!ctx) return;
+    
+    // Draw connections between landmarks
+    ctx.strokeStyle = '#4CAF50';
+    ctx.lineWidth = 3;
+    
+    // Highlight specific landmarks
+    ctx.fillStyle = '#FF5722';
+    landmarks.forEach((landmark, index) => {
+      const x = landmark.x * ctx.canvas.width;
+      const y = landmark.y * ctx.canvas.height;
+      
+      // Draw landmark point
+      ctx.beginPath();
+      ctx.arc(x, y, index % 4 === 0 ? 6 : 3, 0, 2 * Math.PI);
+      ctx.fill();
+    });
+  };
+
+  // Update gesture count when gesture changes
+  useEffect(() => {
+    if (currentGesture !== "None" && isStreaming) {
+      setGestureCount(prev => ({
+        ...prev,
+        [currentGesture]: prev[currentGesture] + 1
+      }));
+      
+      // If we have a canvas context, highlight the gesture visually
+      const canvas = canvasRef.current;
+      if (canvas) {
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          // Clear previous drawings
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          
+          // Add text indicator for detected gesture
+          ctx.font = '24px Arial';
+          ctx.fillStyle = 'rgba(76, 175, 80, 0.8)';
+          ctx.fillText(`${currentGesture} (${Math.round(confidence * 100)}%)`, 20, 40);
+        }
+      }
+    }
+  }, [currentGesture, confidence, isStreaming]);
+
+  // Process video frames for hand gesture detection
   useEffect(() => {
     let animationId: number;
     
-    const detectGestures = () => {
-      if (isStreaming && videoRef.current && canvasRef.current) {
-        const video = videoRef.current;
-        const canvas = canvasRef.current;
-        const context = canvas.getContext('2d');
+    const processFrame = async () => {
+      if (isStreaming && videoRef.current) {
+        // Process the current video frame
+        await detectGesture(videoRef.current);
         
-        if (context && video.readyState === 4) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
-          
-          // Draw the video frame to the canvas
-          context.drawImage(video, 0, 0, canvas.width, canvas.height);
-          
-          // Simulate random gesture detection for demo purposes
-          if (Math.random() < 0.05) { // Occasionally change the detected gesture
-            const gestures = Object.keys(gestureCount);
-            const randomGesture = gestures[Math.floor(Math.random() * gestures.length)];
-            setCurrentGesture(randomGesture);
-            setGestureCount(prev => ({
-              ...prev,
-              [randomGesture]: prev[randomGesture] + 1
-            }));
-            
-            // Draw a simple hand outline (placeholder for actual landmarks)
-            context.strokeStyle = '#4CAF50';
-            context.lineWidth = 2;
-            context.beginPath();
-            context.arc(canvas.width / 2, canvas.height / 2, 50, 0, 2 * Math.PI);
-            context.stroke();
-          }
+        // Update canvas dimensions to match video
+        if (canvasRef.current && videoRef.current.readyState === 4) {
+          canvasRef.current.width = videoRef.current.videoWidth;
+          canvasRef.current.height = videoRef.current.videoHeight;
         }
       }
       
-      animationId = requestAnimationFrame(detectGestures);
+      animationId = requestAnimationFrame(processFrame);
     };
     
-    if (isStreaming) {
-      detectGestures();
+    if (isStreaming && isInitialized) {
+      processFrame();
     }
     
     return () => {
@@ -93,7 +126,7 @@ const HandGestureRecognition = () => {
         cancelAnimationFrame(animationId);
       }
     };
-  }, [isStreaming, gestureCount]);
+  }, [isStreaming, isInitialized, detectGesture]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -169,8 +202,9 @@ const HandGestureRecognition = () => {
           <h3 className="text-lg font-medium mb-2">How to use</h3>
           <p className="text-sm text-gray-500">
             Position your hand in front of the camera and make different gestures. 
-            The application will attempt to recognize common hand gestures such as open palm, 
-            fist, pointing, victory sign, and thumbs up.
+            The application will recognize common hand gestures such as open palm, 
+            fist, pointing, victory sign, and thumbs up. Keep your hand clearly visible
+            and make distinct gestures for best results.
           </p>
         </CardContent>
       </Card>
